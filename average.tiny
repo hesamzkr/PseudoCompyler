@@ -1,0 +1,9 @@
+
+DECLARE x: INTEGER
+
+IF x >= 3
+    THEN
+        PRINT("More")
+    ELSE
+        PRINT("Less")
+ENDIF

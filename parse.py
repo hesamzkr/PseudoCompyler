@@ -1,4 +1,5 @@
 import sys
+import re
 from lex import *
 
 # Parser object keeps track of current token, checks if the code matches the grammar, and emits code along the way.
@@ -45,7 +46,7 @@ class Parser:
         return self.checkToken(TokenType.GT) or self.checkToken(TokenType.GTEQ) or self.checkToken(TokenType.LT) or self.checkToken(TokenType.LTEQ) or self.checkToken(TokenType.EQEQ) or self.checkToken(TokenType.NOTEQ)
 
     def abort(self, message):
-        sys.exit("Error! " + message)
+        sys.exit("Parse Error: " + message)
 
     # Production rules.
 
@@ -55,7 +56,7 @@ class Parser:
         self.emitter.headerLine(
             "using System;\nusing System.IO;\nusing System.Linq;\nusing System.Collections.Generic;\n")
         self.emitter.headerLine(
-            "class Main\n{\n\tpublic static void main(string[] args)\n{")
+            "class Main\n{\n\tpublic static void main(string[] args)\n\t{")
 
         # Since some newlines are required in our grammar, need to skip the excess.
         while self.checkToken(TokenType.NEWLINE):
@@ -66,13 +67,12 @@ class Parser:
             self.statement()
 
         # Wrap things up.
-        self.emitter.emitLine("return 0;")
-        self.emitter.emitLine("}")
+        self.emitter.emitLine("\t}\n}")
 
         # Check that each label referenced in a GOTO is declared.
-        for label in self.labelsGotoed:
-            if label not in self.labelsDeclared:
-                self.abort("Attempting to GOTO to undeclared label: " + label)
+        # for label in self.labelsGotoed:
+        #     if label not in self.labelsDeclared:
+        #         self.abort("Attempting to GOTO to undeclared label: " + label)
 
     # One of the following statements...
 
@@ -86,24 +86,24 @@ class Parser:
             if self.checkToken(TokenType.STRING):
                 # Simple string, so print it.
                 self.emitter.emitLine(
-                    "printf(\"" + self.curToken.text + "\\n\");")
+                    f"Console.WriteLine(\"{self.curToken.text}\");")
                 self.nextToken()
 
             else:
                 # Expect an expression and print the result as a float.
-                self.emitter.emit("printf(\"%" + ".2f\\n\", (float)(")
+                self.emitter.emit("Console.WriteLine($\"{")
                 self.expression()
-                self.emitter.emitLine("));")
+                self.emitter.emitLine("}\");")
 
         # "IF" comparison "THEN" block "ENDIF"
         elif self.checkToken(TokenType.IF):
             self.nextToken()
-            self.emitter.emit("if(")
+            self.emitter.emit("if (")
             self.comparison()
 
             self.match(TokenType.THEN)
             self.nl()
-            self.emitter.emitLine("){")
+            self.emitter.emitLine(") {")
 
             # Zero or more statements in the body.
             while not self.checkToken(TokenType.ENDIF):
@@ -115,12 +115,12 @@ class Parser:
         # "WHILE" comparison "REPEAT" block "ENDWHILE"
         elif self.checkToken(TokenType.WHILE):
             self.nextToken()
-            self.emitter.emit("while(")
+            self.emitter.emit("while (")
             self.comparison()
 
             self.match(TokenType.REPEAT)
             self.nl()
-            self.emitter.emitLine("){")
+            self.emitter.emitLine(") {")
 
             # Zero or more statements in the loop body.
             while not self.checkToken(TokenType.ENDWHILE):
@@ -129,40 +129,29 @@ class Parser:
             self.match(TokenType.ENDWHILE)
             self.emitter.emitLine("}")
 
-        # "LABEL" ident
-        elif self.checkToken(TokenType.LABEL):
-            self.nextToken()
-
-            # Make sure this label doesn't already exist.
-            if self.curToken.text in self.labelsDeclared:
-                self.abort("Label already exists: " + self.curToken.text)
-            self.labelsDeclared.add(self.curToken.text)
-
-            self.emitter.emitLine(self.curToken.text + ":")
-            self.match(TokenType.IDENT)
-
-        # "GOTO" ident
-        elif self.checkToken(TokenType.GOTO):
-            self.nextToken()
-            self.labelsGotoed.add(self.curToken.text)
-            self.emitter.emitLine("goto " + self.curToken.text + ";")
-            self.match(TokenType.IDENT)
-
         # "DECLARE" ident = expression
+        # DECLARE ident: TYPE
         elif self.checkToken(TokenType.DECLARE):
+            match = re.findall(
+                r"DECLARE ([\w]+) ?: ?(.+)", self.curToken.text)[0]
+            ident = match[0]
+            identType = self.typeConversion(match[1])
+
+            if ident in self.symbols:
+                sys.exit(f"{ident} is already delcared")
+
+            self.symbols.add(ident)
+            self.emitter.emitLine(f"{identType} {ident};")
             self.nextToken()
 
-            #  Check if ident exists in symbol table. If not, declare it.
-            if self.curToken.text not in self.symbols:
-                self.symbols.add(self.curToken.text)
-                self.emitter.headerLine("float " + self.curToken.text + ";")
-
-            self.emitter.emit(self.curToken.text + " = ")
-            self.match(TokenType.IDENT)
-            self.match(TokenType.EQ)
-
-            self.expression()
-            self.emitter.emitLine(";")
+        elif self.checkToken(TokenType.IDENT):
+            ident = self.curToken.text
+            if ident not in self.symbols:
+                self.abort(f"Identifier {self.curToken.text} not defined")
+            self.nextToken()
+            self.emitter.emitLine(
+                f"{ident} = {self.curToken.text};")
+            self.nextToken()
 
         # "INPUT" ident
         elif self.checkToken(TokenType.INPUT):
@@ -259,3 +248,14 @@ class Parser:
         # But we will allow extra newlines too, of course.
         while self.checkToken(TokenType.NEWLINE):
             self.nextToken()
+
+    def typeConversion(self, dataType):
+        data = {"INTEGER": "int", "REAL": "float", "STRING": "string"}
+        if dataType in data:
+            return data[dataType]
+        elif "ARRAY" in dataType:
+            match = re.findall(
+                r"ARRAY\[([\d]+) ?: ?([\d]+)] ?OF ?([\w]+)", dataType)[0]
+            return f"{self.typeConversion(match[2])}[]"
+        else:
+            self.abort(f"Undefined Type: {dataType}")

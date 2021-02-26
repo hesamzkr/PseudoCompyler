@@ -59,9 +59,14 @@ class Lexer:
             else:
                 token = Token(self.curChar, TokenType.GT)
         elif self.curChar == '<':
-            # Check whether this is token is < or <=
+            # Check whether this is token is <- or <= or <
             if self.peek() == '-':
-                token = Token(self.curChar, TokenType.EQ)
+                self.nextChar()
+                startPos = self.curPos + 1
+                while self.peek() != '\n':
+                    self.nextChar()
+                text = self.source[startPos: self.curPos + 1]
+                token = Token(text.strip(), TokenType.EQ)
             elif self.peek() == '=':
                 lastChar = self.curChar
                 self.nextChar()
@@ -121,9 +126,14 @@ class Lexer:
             # Get the substring.
             tokText = self.source[startPos: self.curPos + 1]
             keyword = Token.checkIfKeyword(tokText)
-            if keyword == None:  # Identifier
+            if keyword == None:
+                print(tokText)
                 token = Token(tokText, TokenType.IDENT)
-            else:   # Keyword
+            else:
+                if (tokText == 'DECLARE'):
+                    while self.peek() != '\n':
+                        self.nextChar()
+                    tokText = self.source[startPos: self.curPos + 1]
                 token = Token(tokText, keyword)
         elif self.curChar == '\n':
             # Newline.
@@ -156,6 +166,9 @@ class Token:
         self.text = tokenText
         # The TokenType that this token is classified as.
         self.kind = tokenKind
+
+    def __str__(self):
+        return f"kind: {self.kind}, text: {self.text}"
 
     @staticmethod
     def checkIfKeyword(tokenText):

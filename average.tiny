@@ -1,9 +1,5 @@
+# Compute average of given values.
 
-DECLARE x: INTEGER
+DECLARE abc: ARRAY[3:5] OF STRING
 
-IF x >= 3
-    THEN
-        PRINT("More")
-    ELSE
-        PRINT("Less")
-ENDIF
+abc <- 5

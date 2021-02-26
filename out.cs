@@ -12,4 +12,14 @@ class Main
         //
         //
         // fn()
-        
+    }
+
+    public static void First(string arg)
+    {
+
+    }
+
+    public static void Second(string arg)
+    {
+    }
+}

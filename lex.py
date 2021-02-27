@@ -28,7 +28,8 @@ class Lexer:
 
     # Invalid token found, print error message and exit.
     def abort(self, message):
-        sys.exit("Lexing error. " + message)
+        txt = "{color}Lexing Error\n{message}{end}"
+        sys.exit(txt.format(color="\033[91m", end="\033[0m", message=message))
 
     # Return the next token.
     def getToken(self):
@@ -38,7 +39,16 @@ class Lexer:
 
         # Check the first character of this token to see if we can decide what it is.
         # If it is a multiple character operator (e.g., !=), number, identifier, or keyword, then we will process the rest.
-        if self.curChar == '+':
+        if self.curChar == '&' and self.peek() == '&':
+            token = Token('+', TokenType.CONCAT)
+            self.nextChar()
+        elif self.curChar == '(':
+            token = Token(self.curChar, TokenType.BRACKOPEN)
+        elif self.curChar == ')':
+            token = Token(self.curChar, TokenType.BRACKCLOSE)
+        elif self.curChar == ',':
+            token = Token(self.curChar, TokenType.COMMA)
+        elif self.curChar == '+':
             token = Token(self.curChar, TokenType.PLUS)
         elif self.curChar == '-':
             token = Token(self.curChar, TokenType.MINUS)
@@ -47,9 +57,7 @@ class Lexer:
         elif self.curChar == '/':
             token = Token(self.curChar, TokenType.SLASH)
         elif self.curChar == '=':
-            lastChar = self.curChar
-            self.nextChar()
-            token = Token(lastChar + self.curChar, TokenType.EQEQ)
+            token = Token("==", TokenType.EQEQ)
         elif self.curChar == '>':
             # Check whether this is token is > or >=
             if self.peek() == '=':
@@ -62,11 +70,15 @@ class Lexer:
             # Check whether this is token is <- or <= or <
             if self.peek() == '-':
                 self.nextChar()
-                startPos = self.curPos + 1
-                while self.peek() != '\n':
-                    self.nextChar()
-                text = self.source[startPos: self.curPos + 1]
-                token = Token(text.strip(), TokenType.EQ)
+                # startPos = self.curPos + 1
+                # while self.peek() != '\n':
+                #     self.nextChar()
+                # text = self.source[startPos: self.curPos + 1]
+                # token = Token(text.strip(), TokenType.EQ)
+                token = Token("=", TokenType.EQ)
+            elif self.peek() == '>':
+                self.nextChar()
+                token = Token("!=", TokenType.NOTEQ)
             elif self.peek() == '=':
                 lastChar = self.curChar
                 self.nextChar()
@@ -81,20 +93,28 @@ class Lexer:
             else:
                 self.abort("Expected !=, got !" + self.peek())
 
+        elif self.curChar == ':':
+            token = Token(':', TokenType.COLON)
         elif self.curChar == '\"':
             # Get characters between quotations.
             self.nextChar()
             startPos = self.curPos
 
             while self.curChar != '\"':
+                self.nextChar()
                 # Don't allow special characters in the string. No escape characters, newlines, tabs, or %.
                 # We will be using C's printf on this string.
-                if self.curChar == '\r' or self.curChar == '\n' or self.curChar == '\t' or self.curChar == '\\' or self.curChar == '%':
-                    self.abort("Illegal character in string.")
-                self.nextChar()
+                # if self.curChar == '\r' or self.curChar == '\n' or self.curChar == '\t' or self.curChar == '\\':
+                # self.abort("Illegal character in string.")
 
             tokText = self.source[startPos: self.curPos]  # Get the substring.
             token = Token(tokText, TokenType.STRING)
+        elif self.curChar == "'":
+            self.nextChar()
+            token = Token(self.curChar, TokenType.CHAR)
+            self.nextChar()
+            if self.curChar != "'":
+                self.abort(f"Invalid character at '{token.text}'")
 
         elif self.curChar.isdigit():
             # Leading character is a digit, so this must be a number.
@@ -127,13 +147,24 @@ class Lexer:
             tokText = self.source[startPos: self.curPos + 1]
             keyword = Token.checkIfKeyword(tokText)
             if keyword == None:
-                print(tokText)
-                token = Token(tokText, TokenType.IDENT)
-            else:
-                if (tokText == 'DECLARE'):
-                    while self.peek() != '\n':
+                if self.peek() == '[':
+                    while self.curChar != ']':
                         self.nextChar()
                     tokText = self.source[startPos: self.curPos + 1]
+                    token = Token(tokText, TokenType.INDEX)
+                else:
+                    token = Token(tokText, TokenType.IDENT)
+            else:
+                if keyword == TokenType.FALSE:
+                    tokText = "false"
+                elif keyword == TokenType.TRUE:
+                    tokText = "true"
+                elif keyword == TokenType.AND:
+                    tokText = "&&"
+                elif keyword == TokenType.OR:
+                    tokText = "||"
+                elif keyword == TokenType.NOT:
+                    tokText = "!"
                 token = Token(tokText, keyword)
         elif self.curChar == '\n':
             # Newline.
@@ -154,7 +185,7 @@ class Lexer:
             self.nextChar()
 
     def skipComment(self):
-        if self.curChar == '#':
+        if self.curChar == '/' and self.peek() == '/':
             while self.curChar != '\n':
                 self.nextChar()
 
@@ -186,18 +217,46 @@ class TokenType(enum.Enum):
     NUMBER = 1
     IDENT = 2
     STRING = 3
+    INDEX = 4
+    BRACKOPEN = 5
+    BRACKCLOSE = 6
+    CHAR = 7
     # Keywords.
     LABEL = 101
     GOTO = 102
-    PRINT = 103
+    OUTPUT = 103
     INPUT = 104
     DECLARE = 105
     IF = 106
     THEN = 107
-    ENDIF = 108
-    WHILE = 109
-    REPEAT = 110
-    ENDWHILE = 111
+    ELSE = 108
+    ENDIF = 109
+    WHILE = 110
+    REPEAT = 111
+    ENDWHILE = 112
+    AND = 113
+    OR = 114
+    DO = 115
+    FOR = 116
+    TO = 117
+    ENDFOR = 118
+    NEXT = 119
+    UNTIL = 120
+    CASE = 121
+    OF = 122
+    OTHERWISE = 123
+    ENDCASE = 124
+    NOT = 125
+    CONSTANT = 126
+    PROCEDURE = 127
+    ENDPROCEDURE = 128
+    FUNCTION = 129
+    ENDFUNCTION = 130
+    RETURNS = 131
+    RETURN = 132
+    CALL = 133
+    FALSE = 134
+    TRUE = 135
     # Operators.
     EQ = 201
     PLUS = 202
@@ -210,3 +269,6 @@ class TokenType(enum.Enum):
     LTEQ = 209
     GT = 210
     GTEQ = 211
+    CONCAT = 212
+    COLON = 213
+    COMMA = 214

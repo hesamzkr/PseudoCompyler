@@ -31,8 +31,8 @@ class Parser:
     # Try to match current token. If not, error. Advances the current token.
     def match(self, kind):
         if not self.checkToken(kind):
-            self.abort("Expected " + kind.name +
-                       ", got " + self.curToken.kind.name)
+            self.abort(
+                f"Expected ({kind.name}), got ({self.curToken.kind.name}), text: {self.curToken.text}")
         self.nextToken()
 
     # Advances the current token.
@@ -43,10 +43,11 @@ class Parser:
 
     # Return true if the current token is a comparison operator.
     def isComparisonOperator(self):
-        return self.checkToken(TokenType.GT) or self.checkToken(TokenType.GTEQ) or self.checkToken(TokenType.LT) or self.checkToken(TokenType.LTEQ) or self.checkToken(TokenType.EQEQ) or self.checkToken(TokenType.NOTEQ)
+        return self.checkToken(TokenType.GT) or self.checkToken(TokenType.GTEQ) or self.checkToken(TokenType.LT) or self.checkToken(TokenType.LTEQ) or self.checkToken(TokenType.EQEQ) or self.checkToken(TokenType.NOTEQ) or self.checkToken(TokenType.AND) or self.checkToken(TokenType.OR) or self.checkToken(TokenType.NOT)
 
     def abort(self, message):
-        sys.exit("Parse Error: " + message)
+        txt = "{color}Parse Error\n{message}{end}"
+        sys.exit(txt.format(color="\033[91m", end="\033[0m", message=message))
 
     # Production rules.
 
@@ -56,7 +57,7 @@ class Parser:
         self.emitter.headerLine(
             "using System;\nusing System.IO;\nusing System.Linq;\nusing System.Collections.Generic;\n")
         self.emitter.headerLine(
-            "class Main\n{\n\tpublic static void main(string[] args)\n\t{")
+            "class Program\n{\n\tpublic static void Main(string[] args)\n\t{")
 
         # Since some newlines are required in our grammar, need to skip the excess.
         while self.checkToken(TokenType.NEWLINE):
@@ -67,7 +68,7 @@ class Parser:
             self.statement()
 
         # Wrap things up.
-        self.emitter.emitLine("\t}\n}")
+        self.emitter.emitLine("\t}")
 
         # Check that each label referenced in a GOTO is declared.
         # for label in self.labelsGotoed:
@@ -79,8 +80,91 @@ class Parser:
     def statement(self):
         # Check the first token to see what kind of statement this is.
 
-        # "PRINT" (expression | string)
-        if self.checkToken(TokenType.PRINT):
+        # "OUTPUT" (expression | string)
+        if self.checkToken(TokenType.PROCEDURE):
+            self.nextToken()
+            self.emitter.isMethod = True
+            name = self.curToken.text
+            if name not in self.symbols:
+                self.symbols.add(name)
+            else:
+                self.abort(f"Procedure name ({name}) already exists")
+            self.emitter.emit(f"public static void {name}(")
+            self.match(TokenType.IDENT)
+            self.match(TokenType.BRACKOPEN)
+
+            while not self.checkToken(TokenType.BRACKCLOSE):
+                parName = self.curToken.text
+                if parName not in self.symbols:
+                    self.symbols.add(parName)
+                self.match(TokenType.IDENT)
+
+                self.match(TokenType.COLON)
+                dataType = self.typeConversion(self.curToken.text)
+                self.emitter.emit(f"{dataType} {parName}")
+                self.nextToken()
+                if self.checkToken(TokenType.COMMA):
+                    self.emitter.emit(", ")
+                    self.nextToken()
+
+            self.emitter.emitLine(")\n\t{")
+            self.match(TokenType.BRACKCLOSE)
+
+        elif self.checkToken(TokenType.FUNCTION):
+            self.nextToken()
+            self.emitter.isMethod = True
+            name = self.curToken.text
+            if name not in self.symbols:
+                self.symbols.add(name)
+            else:
+                self.abort(f"Function name ({name}) already exists")
+            self.match(TokenType.IDENT)
+            self.match(TokenType.BRACKOPEN)
+
+            parString = ""
+            while not self.checkToken(TokenType.BRACKCLOSE):
+                parName = self.curToken.text
+                if parName not in self.symbols:
+                    self.symbols.add(parName)
+                self.match(TokenType.IDENT)
+
+                self.match(TokenType.COLON)
+                dataType = self.typeConversion(self.curToken.text)
+                parString += f"{dataType} {parName}"
+                self.nextToken()
+                if self.checkToken(TokenType.COMMA):
+                    parString += ", "
+                    self.nextToken()
+
+            self.match(TokenType.BRACKCLOSE)
+            self.match(TokenType.RETURNS)
+            returnsType = self.typeConversion(self.curToken.text)
+
+            # public static int Max(int Number1, int Number2) {
+            self.emitter.emitLine(
+                f"public static {returnsType} {name}({parString}) " + "{")
+            self.nextToken()
+
+        elif self.checkToken(TokenType.ENDPROCEDURE) or self.checkToken(TokenType.ENDFUNCTION):
+            self.nextToken()
+            self.emitter.emitLine("\t}")
+            self.emitter.isMethod = False
+
+        elif self.checkToken(TokenType.RETURN):
+            self.nextToken()
+            self.emitter.emit("return ")
+            self.primary()
+            self.emitter.emitLine(";")
+
+        elif self.checkToken(TokenType.CALL):
+            self.nextToken()
+            while not self.checkToken(TokenType.NEWLINE):
+                self.emitter.emit(self.curToken.text)
+                self.nextToken()
+
+            self.emitter.emitLine(";")
+
+        elif self.checkToken(TokenType.OUTPUT):
             self.nextToken()
 
             if self.checkToken(TokenType.STRING):
@@ -88,7 +172,6 @@ class Parser:
                 self.emitter.emitLine(
                     f"Console.WriteLine(\"{self.curToken.text}\");")
                 self.nextToken()
-
             else:
                 # Expect an expression and print the result as a float.
                 self.emitter.emit("Console.WriteLine($\"{")
@@ -101,6 +184,9 @@ class Parser:
             self.emitter.emit("if (")
             self.comparison()
 
+            while not self.checkToken(TokenType.THEN):
+                self.nextToken()
+
             self.match(TokenType.THEN)
             self.nl()
             self.emitter.emitLine(") {")
@@ -112,13 +198,52 @@ class Parser:
             self.match(TokenType.ENDIF)
             self.emitter.emitLine("}")
 
+        elif self.checkToken(TokenType.ELSE):
+            self.nextToken()
+            if self.checkToken(TokenType.IF):
+                self.nextToken()
+                self.emitter.emit("} else if (")
+                self.comparison()
+
+                while not self.checkToken(TokenType.THEN):
+                    self.nextToken()
+
+                self.match(TokenType.THEN)
+                self.emitter.emitLine(") {")
+            else:
+                self.emitter.emitLine("} else {")
+
+        elif self.checkToken(TokenType.CASE):
+            self.nextToken()
+            self.match(TokenType.OF)
+            self.emitter.emitLine(f"switch ({self.curToken.text}) " + "{")
+            self.match(TokenType.IDENT)
+            self.nl()
+
+            while not self.checkToken(TokenType.ENDCASE):
+                if self.checkToken(TokenType.OTHERWISE):
+                    self.emitter.emit("default")
+                    self.nextToken()
+                else:
+                    self.emitter.emit("case ")
+                    self.primary()
+                    self.match(TokenType.COLON)
+
+                self.emitter.emitLine(":")
+                self.statement()
+
+                self.emitter.emitLine("break;")
+
+            self.emitter.emitLine("}")
+            self.match(TokenType.ENDCASE)
+
         # "WHILE" comparison "REPEAT" block "ENDWHILE"
         elif self.checkToken(TokenType.WHILE):
             self.nextToken()
             self.emitter.emit("while (")
             self.comparison()
 
-            self.match(TokenType.REPEAT)
+            self.match(TokenType.DO)
             self.nl()
             self.emitter.emitLine(") {")
 
@@ -129,28 +254,102 @@ class Parser:
             self.match(TokenType.ENDWHILE)
             self.emitter.emitLine("}")
 
+        elif self.checkToken(TokenType.REPEAT):
+            self.nextToken()
+            self.emitter.emitLine("do {")
+
+            self.nl()
+            while not self.checkToken(TokenType.UNTIL):
+                self.statement()
+
+            self.match(TokenType.UNTIL)
+            self.emitter.emit("} while (!")
+            self.comparison()
+            self.emitter.emitLine(");")
+
+        elif self.checkToken(TokenType.FOR):
+            self.nextToken()
+            ident = self.curToken.text
+            self.emitter.emit(f"for (int {ident} = ")
+            self.match(TokenType.IDENT)
+            self.match(TokenType.EQ)
+            self.emitter.emit(f"{self.curToken.text};")
+            self.match(TokenType.NUMBER)
+            self.match(TokenType.TO)
+            self.emitter.emitLine(
+                f"{ident} < {self.curToken.text}; {ident}++) " + "{")
+            self.match(TokenType.NUMBER)
+            self.nl()
+
+            while not self.checkToken(TokenType.ENDFOR) and not self.checkToken(TokenType.NEXT):
+                self.statement()
+
+            self.nextToken()
+            if self.checkToken(TokenType.IDENT):
+                self.nextToken()
+
+            self.emitter.emitLine("}")
+
         # "DECLARE" ident = expression
         # DECLARE ident: TYPE
         elif self.checkToken(TokenType.DECLARE):
-            match = re.findall(
-                r"DECLARE ([\w]+) ?: ?(.+)", self.curToken.text)[0]
-            ident = match[0]
-            identType = self.typeConversion(match[1])
+            identString = ""
+            while not self.checkToken(TokenType.COLON):
+                self.nextToken()
+                ident = self.curToken.text
+                if ident in self.symbols:
+                    self.abort(f"{ident} is already delcared")
+                self.symbols.add(ident)
+                self.match(TokenType.IDENT)
+                identString += ident
+                if self.checkToken(TokenType.COMMA):
+                    identString += ','
 
-            if ident in self.symbols:
-                sys.exit(f"{ident} is already delcared")
-
-            self.symbols.add(ident)
-            self.emitter.emitLine(f"{identType} {ident};")
-            self.nextToken()
+            self.match(TokenType.COLON)
+            self.emitter.emitLine(
+                f"{self.typeConversion(self.curToken.text)} {identString};")
+            self.match(TokenType.IDENT)
 
         elif self.checkToken(TokenType.IDENT):
             ident = self.curToken.text
             if ident not in self.symbols:
                 self.abort(f"Identifier {self.curToken.text} not defined")
             self.nextToken()
-            self.emitter.emitLine(
-                f"{ident} = {self.curToken.text};")
+
+            if self.checkToken(TokenType.BRACKOPEN):
+                self.emitter.emit(ident)
+                while not self.checkToken(TokenType.NEWLINE):
+                    self.emitter.emit(self.curToken.text)
+                    self.nextToken()
+            elif self.checkToken(TokenType.EQ):
+                self.match(TokenType.EQ)
+                self.emitter.emit(f"{ident} = ")
+                while not self.checkToken(TokenType.NEWLINE):
+                    self.expression()
+
+            self.emitter.emitLine(";")
+
+        elif self.checkToken(TokenType.CONSTANT):
+            self.nextToken()
+            const = self.curToken.text
+            if const in self.symbols:
+                self.abort(f"Constant {self.curToken.text} is already defined")
+
+            self.symbols.add(const)
+
+            self.match(TokenType.IDENT)
+            self.match(TokenType.EQEQ)
+            dataType = self.typeConversion(self.curToken.kind.name)
+            self.emitter.emit(f"const {dataType} {const} = ")
+            self.expression()
+            self.emitter.emitLine(";")
+
+        elif self.checkToken(TokenType.INDEX):
+            ident = self.curToken.text
+            if ident.split('[')[0] not in self.symbols:
+                self.abort(f"Identifier {self.curToken.text} not defined")
+            self.nextToken()
+            self.emitter.emitLine(f"{ident} = {self.curToken.text};")
             self.nextToken()
 
         # "INPUT" ident
@@ -160,22 +359,17 @@ class Parser:
             # If variable doesn't already exist, declare it.
             if self.curToken.text not in self.symbols:
                 self.symbols.add(self.curToken.text)
-                self.emitter.headerLine("float " + self.curToken.text + ";")
+                self.emitter.emitLine(f"string {self.curToken.text};")
 
             # Emit scanf but also validate the input. If invalid, set the variable to 0 and clear the input.
+            self.emitter.emitLine("Console.Write(\"Input: \");")
             self.emitter.emitLine(
-                "if(0 == scanf(\"%" + "f\", &" + self.curToken.text + ")) {")
-            self.emitter.emitLine(self.curToken.text + " = 0;")
-            self.emitter.emit("scanf(\"%")
-            self.emitter.emitLine("*s\");")
-            self.emitter.emitLine("}")
+                f"{self.curToken.text} = Console.ReadLine();")
             self.match(TokenType.IDENT)
-
         # This is not a valid statement. Error!
         else:
-            self.abort("Invalid statement at " + self.curToken.text +
-                       " (" + self.curToken.kind.name + ")")
-
+            self.abort(
+                f"Invalid statement at '{self.curToken.text}' ({self.curToken.kind.name})")
         # Newline.
         self.nl()
 
@@ -183,12 +377,6 @@ class Parser:
 
     def comparison(self):
         self.expression()
-        # Must be at least one comparison operator and another expression.
-        if self.isComparisonOperator():
-            self.emitter.emit(self.curToken.text)
-            self.nextToken()
-            self.expression()
-        # Can have 0 or more comparison operator and expressions.
         while self.isComparisonOperator():
             self.emitter.emit(self.curToken.text)
             self.nextToken()
@@ -199,7 +387,7 @@ class Parser:
     def expression(self):
         self.term()
         # Can have 0 or more +/- and expressions.
-        while self.checkToken(TokenType.PLUS) or self.checkToken(TokenType.MINUS):
+        while self.checkToken(TokenType.PLUS) or self.checkToken(TokenType.MINUS) or self.checkToken(TokenType.BRACKOPEN):
             self.emitter.emit(self.curToken.text)
             self.nextToken()
             self.term()
@@ -218,7 +406,7 @@ class Parser:
 
     def unary(self):
         # Optional unary +/-
-        if self.checkToken(TokenType.PLUS) or self.checkToken(TokenType.MINUS):
+        if self.checkToken(TokenType.PLUS) or self.checkToken(TokenType.MINUS) or self.checkToken(TokenType.CONCAT):
             self.emitter.emit(self.curToken.text)
             self.nextToken()
         self.primary()
@@ -226,20 +414,27 @@ class Parser:
     # primary ::= number | ident
 
     def primary(self):
-        if self.checkToken(TokenType.NUMBER):
+        if self.checkToken(TokenType.NUMBER) or self.checkToken(TokenType.INDEX) or self.checkToken(TokenType.TRUE) or self.checkToken(TokenType.FALSE) or self.checkToken(TokenType.BRACKCLOSE):
             self.emitter.emit(self.curToken.text)
+            self.nextToken()
+        elif self.checkToken(TokenType.STRING):
+            self.emitter.emit(f"\"{self.curToken.text}\"")
+            self.nextToken()
+        elif self.checkToken(TokenType.CHAR):
+            self.emitter.emit(f"'{self.curToken.text}'")
             self.nextToken()
         elif self.checkToken(TokenType.IDENT):
             # Ensure the variable already exists.
-            if self.curToken.text not in self.symbols:
+            if self.curToken.text not in self.symbols and not self.checkPeek(TokenType.BRACKOPEN):
                 self.abort(
-                    "Referencing variable before assignment: " + self.curToken.text)
+                    f"Referencing variable before assignment: {self.curToken.text}")
 
             self.emitter.emit(self.curToken.text)
             self.nextToken()
         else:
             # Error!
-            self.abort("Unexpected token at " + self.curToken.text)
+            self.abort(
+                f"Unexpected token at '{self.curToken.text}' ({self.curToken.kind.name})")
 
     # nl ::= '\n'+
     def nl(self):
@@ -250,12 +445,13 @@ class Parser:
             self.nextToken()
 
     def typeConversion(self, dataType):
-        data = {"INTEGER": "int", "REAL": "float", "STRING": "string"}
+        data = {"INTEGER": "int", "REAL": "float",
+                "STRING": "string", "BOOLEAN": "bool", "CHAR": "char", "NUMBER": "float"}
         if dataType in data:
             return data[dataType]
         elif "ARRAY" in dataType:
-            match = re.findall(
-                r"ARRAY\[([\d]+) ?: ?([\d]+)] ?OF ?([\w]+)", dataType)[0]
-            return f"{self.typeConversion(match[2])}[]"
+            self.match(TokenType.INDEX)
+            self.match(TokenType.OF)
+            return self.typeConversion(self.curToken.text) + "[]"
         else:
-            self.abort(f"Undefined Type: {dataType}")
+            self.abort(f"Undefined Type: ({dataType})")

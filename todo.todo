@@ -1,1 +1,16 @@
-☐ Reserve a string for different functions and add it
+☐ change isMethod bool when procedure or function ends
+☐ Infinite loop if THEN isn't there
+☐ Test PRINT
+☐ Change lexer so it looks at INTEGER and creates Token("int", TokenType.INTEGER)
+
+Features:
+    ✔ Input @done (2/27/2021, 4:32:46 PM)
+    ✔ Output @done (2/27/2021, 4:32:47 PM)
+    ✔ Constants @done (2/27/2021, 4:50:54 PM)
+    ☐ Custom DataTypes
+    ✔ Procedure @done (2/27/2021, 7:34:50 PM)
+    ✔ Functions @done (2/27/2021, 7:34:50 PM)
+    ☐ FileHanding
+    ☐ LENGTH
+    ✔ ' token @done (2/27/2021, 8:42:52 PM)
+    ☐ Constant properly

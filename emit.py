@@ -21,4 +21,5 @@ class Emitter:
 
     def writeFile(self):
         with open(self.fullPath, 'w+') as outputFile:
-            outputFile.write(self.header + self.main + self.methodCode)
+            outputFile.write(self.header + self.main +
+                             self.methodCode + "\n}")

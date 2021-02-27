@@ -5,10 +5,11 @@ import sys
 
 
 def main():
-    print("Pseudocode Compiler")
+    print("\033[95mPseudocode Compiler\033[0m")
 
     if len(sys.argv) != 2:
-        sys.exit("Error: Compiler needs source file as argument.")
+        sys.exit("{color}Error\nCompiler needs source file as argument.{end}".format(
+            color="\033[91m", end="\033[0m"))
     with open(sys.argv[1], 'r') as inputFile:
         input = inputFile.read()
 
@@ -18,7 +19,8 @@ def main():
 
     parser.program()
     emitter.writeFile()
-    print("Compiling completed.")
+    print("{color}Compiling completed.{end}".format(
+        color="\033[92m", end="\033[0m"))
 
 
 main()

@@ -2,7 +2,7 @@ import sys
 import re
 from lex import *
 
-# Parser object keeps track of current token, checks if the code matches the grammar, and emits code along the way.
+# Parse translates tokens into C#, checks grammar and emits the code
 
 
 class Parser:
@@ -10,38 +10,30 @@ class Parser:
         self.lexer = lexer
         self.emitter = emitter
 
-        self.symbols = set()    # All variables we have declared so far.
-        self.labelsDeclared = set()  # Keep track of all labels declared
-        # All labels goto'ed, so we know if they exist or not.
-        self.labelsGotoed = set()
+        self.symbols = set()  # All the declared variables
 
         self.curToken = None
         self.peekToken = None
         self.nextToken()
         self.nextToken()    # Call this twice to initialize current and peek.
 
-    # Return true if the current token matches.
     def checkToken(self, kind):
         return kind == self.curToken.kind
 
-    # Return true if the next token matches.
     def checkPeek(self, kind):
         return kind == self.peekToken.kind
 
-    # Try to match current token. If not, error. Advances the current token.
+    # Check if they match, if not error. also go next token
     def match(self, kind):
         if not self.checkToken(kind):
             self.abort(
                 f"Expected ({kind.name}), got ({self.curToken.kind.name}), text: {self.curToken.text}")
         self.nextToken()
 
-    # Advances the current token.
     def nextToken(self):
         self.curToken = self.peekToken
         self.peekToken = self.lexer.getToken()
-        # No need to worry about passing the EOF, lexer handles that.
 
-    # Return true if the current token is a comparison operator.
     def isComparisonOperator(self):
         return self.checkToken(TokenType.GT) or self.checkToken(TokenType.GTEQ) or self.checkToken(TokenType.LT) or self.checkToken(TokenType.LTEQ) or self.checkToken(TokenType.EQEQ) or self.checkToken(TokenType.NOTEQ) or self.checkToken(TokenType.AND) or self.checkToken(TokenType.OR) or self.checkToken(TokenType.NOT)
 
@@ -49,38 +41,21 @@ class Parser:
         txt = "{color}Parse Error\n{message}{end}"
         sys.exit(txt.format(color="\033[91m", end="\033[0m", message=message))
 
-    # Production rules.
-
-    # program ::= {statement}
-
     def program(self):
         self.emitter.headerLine(
             "using System;\nusing System.IO;\nusing System.Linq;\nusing System.Collections.Generic;\n")
         self.emitter.headerLine(
             "class Program\n{\n\tpublic static void Main(string[] args)\n\t{")
 
-        # Since some newlines are required in our grammar, need to skip the excess.
         while self.checkToken(TokenType.NEWLINE):
             self.nextToken()
 
-        # Parse all the statements in the program.
         while not self.checkToken(TokenType.EOF):
             self.statement()
 
-        # Wrap things up.
         self.emitter.emitLine("\t}")
 
-        # Check that each label referenced in a GOTO is declared.
-        # for label in self.labelsGotoed:
-        #     if label not in self.labelsDeclared:
-        #         self.abort("Attempting to GOTO to undeclared label: " + label)
-
-    # One of the following statements...
-
     def statement(self):
-        # Check the first token to see what kind of statement this is.
-
-        # "OUTPUT" (expression | string)
         if self.checkToken(TokenType.PROCEDURE):
             self.nextToken()
             self.emitter.isMethod = True
@@ -140,7 +115,6 @@ class Parser:
             self.match(TokenType.RETURNS)
             returnsType = self.typeConversion(self.curToken.text)
 
-            # public static int Max(int Number1, int Number2) {
             self.emitter.emitLine(
                 f"public static {returnsType} {name}({parString}) " + "{")
             self.nextToken()
@@ -168,17 +142,19 @@ class Parser:
             self.nextToken()
 
             if self.checkToken(TokenType.STRING):
-                # Simple string, so print it.
                 self.emitter.emitLine(
                     f"Console.WriteLine(\"{self.curToken.text}\");")
                 self.nextToken()
             else:
-                # Expect an expression and print the result as a float.
+                # Not a simple string and there are expressions
                 self.emitter.emit("Console.WriteLine($\"{")
                 self.expression()
+                if self.checkToken(TokenType.BRACKCLOSE):
+                    self.emitter.emit(")")
+                    self.match(TokenType.BRACKCLOSE)
                 self.emitter.emitLine("}\");")
 
-        # "IF" comparison "THEN" block "ENDIF"
+        # "IF" comparison "THEN" code "ENDIF"
         elif self.checkToken(TokenType.IF):
             self.nextToken()
             self.emitter.emit("if (")
@@ -191,7 +167,6 @@ class Parser:
             self.nl()
             self.emitter.emitLine(") {")
 
-            # Zero or more statements in the body.
             while not self.checkToken(TokenType.ENDIF):
                 self.statement()
 
@@ -237,7 +212,7 @@ class Parser:
             self.emitter.emitLine("}")
             self.match(TokenType.ENDCASE)
 
-        # "WHILE" comparison "REPEAT" block "ENDWHILE"
+        # "WHILE" comparison "REPEAT" code "ENDWHILE"
         elif self.checkToken(TokenType.WHILE):
             self.nextToken()
             self.emitter.emit("while (")
@@ -247,7 +222,6 @@ class Parser:
             self.nl()
             self.emitter.emitLine(") {")
 
-            # Zero or more statements in the loop body.
             while not self.checkToken(TokenType.ENDWHILE):
                 self.statement()
 
@@ -290,7 +264,6 @@ class Parser:
 
             self.emitter.emitLine("}")
 
-        # "DECLARE" ident = expression
         # DECLARE ident: TYPE
         elif self.checkToken(TokenType.DECLARE):
             identString = ""
@@ -312,7 +285,7 @@ class Parser:
 
         elif self.checkToken(TokenType.IDENT):
             ident = self.curToken.text
-            if ident not in self.symbols:
+            if ident.split('[')[0] not in self.symbols:
                 self.abort(f"Identifier {self.curToken.text} not defined")
             self.nextToken()
 
@@ -344,14 +317,6 @@ class Parser:
             self.expression()
             self.emitter.emitLine(";")
 
-        elif self.checkToken(TokenType.INDEX):
-            ident = self.curToken.text
-            if ident.split('[')[0] not in self.symbols:
-                self.abort(f"Identifier {self.curToken.text} not defined")
-            self.nextToken()
-            self.emitter.emitLine(f"{ident} = {self.curToken.text};")
-            self.nextToken()
-
         # "INPUT" ident
         elif self.checkToken(TokenType.INPUT):
             self.nextToken()
@@ -361,19 +326,16 @@ class Parser:
                 self.symbols.add(self.curToken.text)
                 self.emitter.emitLine(f"string {self.curToken.text};")
 
-            # Emit scanf but also validate the input. If invalid, set the variable to 0 and clear the input.
             self.emitter.emitLine("Console.Write(\"Input: \");")
             self.emitter.emitLine(
                 f"{self.curToken.text} = Console.ReadLine();")
             self.match(TokenType.IDENT)
-        # This is not a valid statement. Error!
         else:
             self.abort(
                 f"Invalid statement at '{self.curToken.text}' ({self.curToken.kind.name})")
-        # Newline.
-        self.nl()
 
-    # comparison ::= expression (("==" | "!=" | ">" | ">=" | "<" | "<=") expression)+
+        # Must be a new line
+        self.nl()
 
     def comparison(self):
         self.expression()
@@ -382,39 +344,30 @@ class Parser:
             self.nextToken()
             self.expression()
 
-    # expression ::= term {( "-" | "+" ) term}
-
     def expression(self):
         self.term()
-        # Can have 0 or more +/- and expressions.
+        # For + - expressions
         while self.checkToken(TokenType.PLUS) or self.checkToken(TokenType.MINUS) or self.checkToken(TokenType.BRACKOPEN):
             self.emitter.emit(self.curToken.text)
             self.nextToken()
             self.term()
 
-    # term ::= unary {( "/" | "*" ) unary}
-
     def term(self):
         self.unary()
-        # Can have 0 or more *// and expressions.
+        # for * / expressions
         while self.checkToken(TokenType.ASTERISK) or self.checkToken(TokenType.SLASH):
             self.emitter.emit(self.curToken.text)
             self.nextToken()
             self.unary()
 
-    # unary ::= ["+" | "-"] primary
-
     def unary(self):
-        # Optional unary +/-
         if self.checkToken(TokenType.PLUS) or self.checkToken(TokenType.MINUS) or self.checkToken(TokenType.CONCAT):
             self.emitter.emit(self.curToken.text)
             self.nextToken()
         self.primary()
 
-    # primary ::= number | ident
-
     def primary(self):
-        if self.checkToken(TokenType.NUMBER) or self.checkToken(TokenType.INDEX) or self.checkToken(TokenType.TRUE) or self.checkToken(TokenType.FALSE) or self.checkToken(TokenType.BRACKCLOSE):
+        if self.checkToken(TokenType.NUMBER) or self.checkToken(TokenType.TRUE) or self.checkToken(TokenType.FALSE) or self.checkToken(TokenType.BRACKCLOSE) or self.checkToken(TokenType.COMMA):
             self.emitter.emit(self.curToken.text)
             self.nextToken()
         elif self.checkToken(TokenType.STRING):
@@ -424,23 +377,18 @@ class Parser:
             self.emitter.emit(f"'{self.curToken.text}'")
             self.nextToken()
         elif self.checkToken(TokenType.IDENT):
-            # Ensure the variable already exists.
-            if self.curToken.text not in self.symbols and not self.checkPeek(TokenType.BRACKOPEN):
+            if self.curToken.text.split('[')[0] not in self.symbols and not self.checkPeek(TokenType.BRACKOPEN):
                 self.abort(
                     f"Referencing variable before assignment: {self.curToken.text}")
 
             self.emitter.emit(self.curToken.text)
             self.nextToken()
         else:
-            # Error!
             self.abort(
                 f"Unexpected token at '{self.curToken.text}' ({self.curToken.kind.name})")
 
-    # nl ::= '\n'+
     def nl(self):
-        # Require at least one newline.
         self.match(TokenType.NEWLINE)
-        # But we will allow extra newlines too, of course.
         while self.checkToken(TokenType.NEWLINE):
             self.nextToken()
 
@@ -450,7 +398,7 @@ class Parser:
         if dataType in data:
             return data[dataType]
         elif "ARRAY" in dataType:
-            self.match(TokenType.INDEX)
+            self.match(TokenType.ARRAY)
             self.match(TokenType.OF)
             return self.typeConversion(self.curToken.text) + "[]"
         else:

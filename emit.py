@@ -1,4 +1,4 @@
-# Emitter object keeps track of the generated code and outputs it.
+# Emitter generates the code for different sections and outputs it.
 class Emitter:
     def __init__(self, fullPath):
         self.fullPath = fullPath

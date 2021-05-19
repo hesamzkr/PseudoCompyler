@@ -8,8 +8,8 @@ eg.
 
 
 
-Example:
 
+Example:
 ```cpp
 FUNCTION Calculate(op: CHAR) RETURNS REAL
    DECLARE x : INTEGER

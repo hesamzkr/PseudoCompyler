@@ -9,7 +9,7 @@ eg.
 
 Example:
 
-```vba
+```vb
 FUNCTION Calculate(op: CHAR) RETURNS REAL
    DECLARE x : INTEGER
    DECLARE y : INTEGER

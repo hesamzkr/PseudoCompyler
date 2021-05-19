@@ -8,10 +8,10 @@ import os
 def main():
     print("\033[95mThe Pseudo-Pseudocode Compiler 😎\033[0m")
 
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 2:
         sys.exit("{color}Error\nCompiler needs source file as argument.{end}".format(
             color="\033[91m", end="\033[0m"))
-    with open(sys.argv[1], 'r') as inputFile:
+    with open(' '.join(sys.argv[1:]), 'r') as inputFile:
         input = inputFile.read()
 
     print("{color}Compiling...{end}".format(

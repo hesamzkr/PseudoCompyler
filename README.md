@@ -9,11 +9,12 @@ eg.
 
 Example:
 
-```cpp
+```vba
 FUNCTION Calculate(op: CHAR) RETURNS REAL
    DECLARE x : INTEGER
    DECLARE y : INTEGER
    DECLARE ans : REAL
+   ans <- 0
    x <- 1
    y <- 2
 
@@ -25,15 +26,15 @@ FUNCTION Calculate(op: CHAR) RETURNS REAL
        OTHERWISE OUTPUT "ERROR"
    ENDCASE
 
-   IF operator <> '+' AND operator <> '-' AND operator <> '*' AND operator <> '/'
+   IF op <> '+' AND op <> '-' AND op <> '*' AND op <> '/'
        THEN
-           RETURN -1
+           RETURN 0
        ELSE
            RETURN ans
    ENDIF
 ENDFUNCTION
 
-DECLARE operator : CHAR
-
-OUTPUT Calculate(operator)
+DECLARE test : CHAR
+test <- '+'
+OUTPUT Calculate(test)
 ```

@@ -9,7 +9,7 @@ eg.
 
 Example:
 
-```vb
+```cpp
 FUNCTION Calculate(op: CHAR) RETURNS REAL
    DECLARE x : INTEGER
    DECLARE y : INTEGER

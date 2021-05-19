@@ -2,5 +2,6 @@
 
 Run with:
 `python main.py <path/to/file.txt>`
+
 eg.
 `python main.py pseudo.txt`

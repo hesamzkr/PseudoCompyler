@@ -1,4 +1,4 @@
-# Compiler for Cambridge A Level Pseudoscience
+# Compiler for Cambridge IA Level CS PseudoCode
 
 Run with:
 `python main.py <path/to/file.txt>`

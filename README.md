@@ -9,7 +9,8 @@ eg.
 
 Example:
 
-`FUNCTION Calculate(op: CHAR) RETURNS REAL
+```cpp
+FUNCTION Calculate(op: CHAR) RETURNS REAL
    DECLARE x : INTEGER
    DECLARE y : INTEGER
    DECLARE ans : REAL
@@ -34,4 +35,5 @@ ENDFUNCTION
 
 DECLARE operator : CHAR
 
-OUTPUT Calculate(operator)`
+OUTPUT Calculate(operator)
+```

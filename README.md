@@ -2,14 +2,16 @@
 ## Prerequisites
 The C# compiler is required to be able to run this, as the pseudocode is first translated to C# before using Roslyn to compile it into an executable.
 It can be downloaded [here](https://github.com/dotnet/roslyn) or by downloading [Visual Studio](https://visualstudio.microsoft.com/vs/community/).
+<br>
 
 
-## Running
+## How To Use
 Run with:
 `python main.py <path/to/file.txt>`
 
 eg.
 `python main.py pseudo.txt`
+<br>
 
 
 ## Pseudocode Example

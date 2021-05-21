@@ -6,8 +6,8 @@ Run with:
 eg.
 `python main.py pseudo.txt`
 
-
-
+ 
+ 
 
 Example:
 ```cpp
